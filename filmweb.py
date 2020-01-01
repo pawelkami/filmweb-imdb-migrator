@@ -20,7 +20,7 @@ class FilmRate(object):
         return str(self)
 
 
-def createRatesDict(soup):
+def create_rates_dict(soup):
     rates_dict = {}
     user_votes_div = soup.find('div', attrs={'class' : 'userVotesPage__results'})
 
@@ -31,7 +31,7 @@ def createRatesDict(soup):
     return rates_dict
 
 
-def getRateFromDiv(soup_div, rates_dict):
+def get_rate_from_div(soup_div, rates_dict):
     rate = FilmRate()
     rate.year = int(soup_div.find('div', attrs={'class', 'filmPreview__extraYear'}).contents[0].strip())
     film_rate_div = soup_div.find('div', attrs={'class' : 'UserRateFilm'})
@@ -47,20 +47,20 @@ def getRateFromDiv(soup_div, rates_dict):
     return rate
 
 
-def getRatesOnPage(session, username, path, page_num):
+def get_rates_on_page(session, username, path, page_num):
     data = session.get(f'https://www.filmweb.pl/user/{username}/{path}?page={page_num}').text
 
     film_rates = []
 
     soup = bs.BeautifulSoup(data, "html.parser")
-    rates_dict = createRatesDict(soup) # oceny są przetrzymywane w innym miejscu i wczytywane przez JavaScript - dlatego tworzę z nich słownik
+    rates_dict = create_rates_dict(soup) # oceny są przetrzymywane w innym miejscu i wczytywane przez JavaScript - dlatego tworzę z nich słownik
     for rate in soup.find_all('div', attrs={'class' : 'voteBoxes__box'}):
-        film_rates.append(getRateFromDiv(rate, rates_dict)) # todo
+        film_rates.append(get_rate_from_div(rate, rates_dict)) # todo
 
     return film_rates
 
 
-def getRates(session, username, path):
+def get_rates(session, username, path):
     data = session.get(f'https://www.filmweb.pl/user/{username}/{path}').text
     soup = bs.BeautifulSoup(data, "html.parser")
 
@@ -73,38 +73,49 @@ def getRates(session, username, path):
 
     rates = []
     for i in range(1, page_count + 1):
-        rates += getRatesOnPage(session, username, path, i)
+        rates += get_rates_on_page(session, username, path, i)
 
     return rates
 
 
-def getFilmRates(session, username):
-    return getRates(session, username, 'films')
+def get_film_rates(session, username):
+    return get_rates(session, username, 'films')
 
 
-def getSerialsRates(session, username):
-    return getRates(session, username, 'serials')
+def get_serials_rates(session, username):
+    return get_rates(session, username, 'serials')
 
 
-def getAllFilmwebRates(session, username):
-    return getFilmRates(session, username) + getSerialsRates(session, username)
+def get_all_filmweb_rates(session, username):
+    return get_film_rates(session, username) + get_serials_rates(session, username)
+
+
+def login_to_filmweb(login, password):
+    session = requests.Session()
+    payload = {'j_username' : filmweb_login, 'j_password' : filmweb_password}
+
+    a = session.post('https://www.filmweb.pl/j_login', data=payload)
+
+    return session
+
+
+def get_logged_username(session):
+    data = session.get('https://www.filmweb.pl/my').text
+
+
+    soup = bs.BeautifulSoup(data, "html.parser")
+    supa = soup.find('span', attrs={'class' : 'user__name-wrap'})
+    username = supa.contents[0].strip()
+
+    return username
+
 
 
 filmweb_login = input("Filmweb email/login: ")
 filmweb_password = input("Filmweb password: ")
 
-r = requests.Session()
+session = login_to_filmweb(filmweb_login, filmweb_password)
 
-payload = {'j_username' : filmweb_login, 'j_password' : filmweb_password}
+username = get_logged_username(session)
 
-a = r.post('https://www.filmweb.pl/j_login', data=payload)
-
-data = r.get('https://www.filmweb.pl/my').text
-
-
-soup = bs.BeautifulSoup(data, "html.parser")
-supa = soup.find('span', attrs={'class' : 'user__name-wrap'})
-username = supa.contents[0].strip()
-
-
-all_titles = getAllFilmwebRates(r, username)
+all_titles = get_all_filmweb_rates(session, username)
