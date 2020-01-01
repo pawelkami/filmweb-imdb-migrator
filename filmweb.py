@@ -107,8 +107,9 @@ class FilmwebConnector(object):
         self.session = requests.Session()
         payload = {'j_username' : login, 'j_password' : password}
 
-        a = self.session.post('https://www.filmweb.pl/j_login', data=payload)
-        # todo sprawdzić wynik logowania
+        result = self.session.post('https://www.filmweb.pl/j_login', data=payload)
+        if 'bad.credentials' in result.url:
+            raise Exception('Invalid credentials')
 
         self.username = self.get_logged_username()
 
