@@ -26,7 +26,7 @@ class FilmwebConnector(object):
 
 
     def __init__(self, login, password):
-        self.login_to_filmweb(login, password)
+        self.login(login, password)
 
 
     def __create_rates_dict(self, soup):
@@ -103,7 +103,7 @@ class FilmwebConnector(object):
         return self.get_film_rates() + self.get_serials_rates() + self.get_games_rates()
 
 
-    def login_to_filmweb(self, login, password):
+    def login(self, login, password):
         self.session = requests.Session()
         payload = {'j_username' : login, 'j_password' : password}
 
@@ -124,10 +124,11 @@ class FilmwebConnector(object):
         return username
 
 
+if __name__ == '__main__':
+    filmweb_login = input("Filmweb email/login: ")
+    filmweb_password = input("Filmweb password: ")
 
-filmweb_login = input("Filmweb email/login: ")
-filmweb_password = input("Filmweb password: ")
+    filmweb = FilmwebConnector(filmweb_login, filmweb_password)
 
-filmweb = FilmwebConnector(filmweb_login, filmweb_password)
-
-all_titles = filmweb.get_all_filmweb_rates()
+    all_titles = filmweb.get_all_filmweb_rates()
+    print(all_titles)

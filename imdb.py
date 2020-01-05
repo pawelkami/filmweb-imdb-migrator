@@ -1,7 +1,12 @@
 import requests
 import bs4 as bs
-import math
 import json
+import requests_html
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium import webdriver
+import re
+import random
+from time import sleep
 
 
 def strtr(strng, replace):
@@ -22,6 +27,7 @@ def strtr(strng, replace):
 
 
 class ImdbConnector(object):
+    session = None
 
     def __init__(self):
         pass
@@ -54,6 +60,81 @@ class ImdbConnector(object):
             return None
 
         return data_json['d'][0]['id']
+
+
+    def login(self, login, password):
+        self.session = requests_html.HTMLSession()
+        self.session.headers['User-Agent'] =  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Safari/605.1.15'
+        self.session.headers['Accept-Language'] = "en,en-US;q=0,5"
+        self.session.headers['Accept'] = "text/html,application/xhtml+xml,application/xml;q=0.9,/;q=0.8"
+
+        # wchodzenie na stronę, na ktorej sa rozne sposoby logowania (przez imdb, facebook, google itp.) w celu znalezienia odpowiedniego linku
+        data = self.session.get('https://www.imdb.com/registration/signin').text
+
+        # Link faktycznej strony logowania - za pomocą konta IMDb
+        soup = bs.BeautifulSoup(data, "html.parser")
+        login_page_element = soup.find(text='Sign in with IMDb').parent.parent
+        login_page_address = login_page_element.attrs['href']
+
+        # Wejście na stronę za pomocą selenium - inne sposoby są wykrywane jako boty i wymagaja wpisania captchy
+        options = webdriver.ChromeOptions()
+        options.add_argument("headless")
+        driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=options)
+        driver.get(login_page_address)
+        driver.find_element_by_id('ap_email').send_keys(login)
+        driver.find_element_by_id('ap_password').send_keys(password)
+        sleep(random.uniform(1, 3))
+        driver.find_element_by_id('signInSubmit').click()
+        sleep(random.uniform(1, 3))
+
+        # ustawianie cookies zalogowanej sesji uzytkownika w module requests - bedzie on dalej uzywany bo jest lzejszy
+        # i nie wymaga uruchamiania w tym celu specjalnie przegladarki internetowej
+        for cookie in driver.get_cookies():
+            self.session.cookies.set(cookie['name'], cookie['value'])
+
+        result = self.session.get('https://www.imdb.com/')
+        pattern = re.compile('\"userName\":(.*?),')
+        username = re.search(pattern, result.text).group(1)
+        if username is None or username == 'null':
+            raise Exception('Bad credentials or request blocked by bot detection on IMDb. If login data is correct - try again later in a few hours.')
+
+        driver.close()
+
+
+    def rate_film(self, film_id, rating):
+        auth_id = self.__get_auth_id(film_id)
+        payload = {
+            'auth' : auth_id,
+            'tconst' : film_id,
+            'rating' : int(rating),
+            'tracking_tag' : 'title-maindetails',
+            'pageId' : film_id,
+            'pageType' : 'title',
+            'subpageType' : 'main',
+        }
+
+        result = self.session.post('https://www.imdb.com/ratings/_ajax/title', data=payload)
+
+        # result_json = json.loads(result.text)
+        #
+        # if result_json['status'] != 200:
+        #     raise Exception("There was a problem with rating movie id: " + film_id)
+
+
+
+
+    def __get_auth_id(self, film_id):
+        if self.session is None:
+            raise Exception("There is no logged in session")
+
+        data = self.session.get('http://www.imdb.com/title/' + film_id).text
+
+        soup = bs.BeautifulSoup(data, "html.parser")
+        tag = soup.find('div', {'data-auth' : True})
+        if tag is None:
+            return None
+
+        return tag['data-auth']
 
 
 
